@@ -1,0 +1,1124 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IND-TaxonBot · Stock Transfer Diagnostic</title>
+  <meta name="description" content="A wealth-tech ops copilot that reads a stuck transfer screen and ships the fix. Interview POC for INDmoney.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #050B08;
+      --bg-elev: #0A1410;
+      --bg-card: #0D1A15;
+      --bg-card-hover: #11211B;
+      --border: #1B2F24;
+      --border-bright: #2A4D3D;
+      --text: #E8F1ED;
+      --text-dim: #95A89E;
+      --text-muted: #5F7268;
+      --accent: #00D09C;
+      --accent-bright: #19E5AE;
+      --accent-soft: rgba(0, 208, 156, 0.12);
+      --success: #00E676;
+      --warning: #C5A880;
+      --warning-soft: rgba(197, 168, 128, 0.12);
+      --danger: #FF7B7B;
+      --danger-soft: rgba(255, 123, 123, 0.10);
+    }
+    * { -webkit-font-smoothing: antialiased; }
+    html, body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      letter-spacing: -0.005em;
+    }
+    .font-mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .bg-app { background: var(--bg); }
+    .bg-elev { background: var(--bg-elev); }
+    .bg-card { background: var(--bg-card); }
+    .bg-card-h { background: var(--bg-card); transition: background .15s ease; }
+    .bg-card-h:hover { background: var(--bg-card-hover); }
+    .border-c { border-color: var(--border); }
+    .border-cb { border-color: var(--border-bright); }
+    .text-dim { color: var(--text-dim); }
+    .text-muted { color: var(--text-muted); }
+    .text-accent { color: var(--accent); }
+    .text-success { color: var(--success); }
+    .text-warning { color: var(--warning); }
+    .text-danger { color: var(--danger); }
+
+    .grid-bg {
+      background-image:
+        radial-gradient(circle at 20% 0%, rgba(0,208,156,0.06), transparent 40%),
+        radial-gradient(circle at 90% 10%, rgba(0,208,156,0.04), transparent 35%);
+    }
+    .glow {
+      box-shadow:
+        0 0 0 1px rgba(0,208,156,0.25),
+        0 18px 50px -12px rgba(0,208,156,0.25);
+    }
+    .ring-accent { box-shadow: 0 0 0 1px var(--accent); }
+
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+      background: var(--accent-soft); color: var(--accent);
+      border: 1px solid rgba(0, 208, 156, 0.25);
+    }
+    .chip-warn { background: var(--warning-soft); color: var(--warning); border-color: rgba(197,168,128,0.3); }
+    .chip-danger { background: var(--danger-soft); color: var(--danger); border-color: rgba(255,123,123,0.3); }
+    .chip-mute { background: rgba(149,168,158,0.08); color: var(--text-dim); border-color: var(--border); }
+
+    .btn-primary {
+      background: var(--accent); color: #03150F; font-weight: 700;
+      transition: transform .12s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .btn-primary:hover { background: var(--accent-bright, #19E5AE); transform: translateY(-1px); box-shadow: 0 12px 30px -10px rgba(0,208,156,0.55); }
+    .btn-primary:disabled { background: #16382E; color: #4D6B5F; cursor: not-allowed; box-shadow: none; transform: none; }
+
+    .btn-ghost {
+      background: transparent; border: 1px solid var(--border-bright); color: var(--text);
+      transition: background .12s ease, border-color .12s ease;
+    }
+    .btn-ghost:hover { background: var(--bg-card-hover); border-color: var(--accent); }
+
+    .dropzone {
+      border: 1.5px dashed var(--border-bright);
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .dropzone.is-dragover { border-color: var(--accent); background: var(--accent-soft); }
+    .dropzone.has-file { border-style: solid; border-color: var(--accent); }
+
+    .preset-card {
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      transition: border-color .15s ease, transform .12s ease, background .15s ease;
+      cursor: pointer;
+    }
+    .preset-card:hover { border-color: var(--accent); background: var(--bg-card-hover); transform: translateY(-1px); }
+    .preset-card:active { transform: translateY(0); }
+
+    .field-card {
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .field-card.is-error    { border-left: 3px solid var(--danger); }
+    .field-card.is-missing  { border-left: 3px solid var(--warning); }
+    .field-card.is-conflict { border-left: 3px solid var(--warning); }
+    .field-card.is-valid    { border-left: 3px solid var(--success); opacity: 0.78; }
+
+    @keyframes pulseDot {
+      0%, 100% { opacity: 0.4; transform: scale(1); }
+      50%      { opacity: 1;   transform: scale(1.4); }
+    }
+    .pulse-dot {
+      width: 6px; height: 6px; border-radius: 999px; background: var(--accent);
+      animation: pulseDot 1.2s ease-in-out infinite;
+    }
+
+    /* Streaming step list */
+    .step-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 8px;
+      color: var(--text-muted); font-size: 13px;
+      transition: color .2s ease, background .2s ease;
+    }
+    .step-row.is-active { color: var(--text); background: var(--accent-soft); }
+    .step-row.is-done   { color: var(--success); }
+    .step-row .marker {
+      width: 14px; height: 14px; border-radius: 999px;
+      border: 1.5px solid currentColor; display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .step-row.is-done .marker { background: var(--success); border-color: var(--success); }
+    .step-row.is-done .marker::after { content: ''; width: 5px; height: 8px; border-right: 2px solid #021A0F; border-bottom: 2px solid #021A0F; transform: rotate(45deg) translateY(-1px); }
+
+    /* Auto-fill cursor */
+    .ax-cursor {
+      position: absolute; pointer-events: none;
+      width: 18px; height: 22px;
+      transform: translate(-2px, -2px);
+      transition: left .55s cubic-bezier(.4,.2,.2,1), top .55s cubic-bezier(.4,.2,.2,1);
+      z-index: 30;
+      filter: drop-shadow(0 4px 12px rgba(0,0,0,0.45));
+    }
+    .ax-fill {
+      position: absolute; pointer-events: none;
+      background: #ECFDF5;
+      border: 1.5px solid var(--accent);
+      border-radius: 4px;
+      color: #03150F;
+      font-family: 'JetBrains Mono', ui-monospace, monospace;
+      font-size: 11px;
+      padding: 8px 12px;
+      display: flex; align-items: center;
+      opacity: 0;
+      transform: scale(.96);
+      transition: opacity .25s ease, transform .25s ease;
+      z-index: 25;
+    }
+    .ax-fill.show { opacity: 1; transform: scale(1); }
+    .ax-fill::before {
+      content: '✓';
+      color: var(--accent);
+      font-weight: 800;
+      margin-right: 8px;
+    }
+
+    /* Number count-up animation */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .fade-up { animation: fadeUp .45s ease both; }
+
+    .scroll-hide::-webkit-scrollbar { display: none; }
+
+    /* Window chrome for the broker screenshot */
+    .win-chrome {
+      background: linear-gradient(180deg, #142019, #0D1814);
+      border-bottom: 1px solid var(--border);
+    }
+    .traffic { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
+    .traffic.r { background: #FF5F57; }
+    .traffic.y { background: #FEBC2E; }
+    .traffic.g { background: #28C840; }
+
+    /* Mobile IND chat bubble */
+    .ind-bubble {
+      background: linear-gradient(135deg, #00D09C, #009C73);
+      box-shadow: 0 18px 40px -10px rgba(0,208,156,0.45);
+    }
+
+    /* Tab nav */
+    .tab-bar {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .tab-btn {
+      padding: 8px 14px;
+      border-radius: 7px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: transparent;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { color: var(--text); background: var(--bg-card-hover); }
+    .tab-btn.is-active {
+      background: var(--bg-app);
+      color: var(--accent);
+      box-shadow: inset 0 0 0 1px var(--border-bright);
+    }
+    .tab-btn svg { flex-shrink: 0; }
+  </style>
+</head>
+
+<body class="bg-app grid-bg min-h-screen">
+
+  <!-- ===================== HEADER ===================== -->
+  <header class="border-b border-c">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg flex items-center justify-center" style="background: linear-gradient(135deg,#00D09C 0%, #008F6B 100%);">
+          <span class="font-extrabold text-[#03150F] text-lg leading-none">I</span>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold tracking-tight">INDmoney</span>
+            <span class="text-muted text-sm">/</span>
+            <span class="font-semibold text-accent">TaxonBot</span>
+          </div>
+          <div class="text-muted text-[11px] -mt-0.5">Wealth-Tech Ops Copilot · Internal POC v0.1</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-3 text-[12px] text-dim">
+        <span class="chip chip-mute">
+          <span class="pulse-dot" style="background: var(--text-dim);"></span>
+          Demo mode
+        </span>
+        <span class="hidden md:inline">Built for Growth Associate interview · Shriti Chandra</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===================== HERO STRIP ===================== -->
+  <section class="border-b border-c bg-elev">
+    <div class="max-w-7xl mx-auto px-6 py-10 grid grid-cols-12 gap-8 items-center">
+      <div class="col-span-12 lg:col-span-8">
+        <div class="chip mb-3">Growth thesis</div>
+        <h1 class="text-3xl md:text-[34px] font-extrabold tracking-tight leading-tight">
+          <span class="text-dim">~31% of users abandon US stock transfers at the </span>
+          <span class="text-accent">DTC field</span>
+          <span class="text-dim">. The fix takes 30 seconds — if you know where to look.</span>
+        </h1>
+        <p class="mt-4 text-dim text-[15px] max-w-2xl leading-relaxed">
+          TaxonBot is a multimodal copilot that lives in the INDmoney app's chat bubble.
+          A user uploads a screenshot of their stuck Morgan Stanley / CDSL / sell-order screen.
+          We read it, diagnose the failure, and ship a one-tap correction — before they call support.
+        </p>
+        <div class="mt-5 flex flex-wrap gap-2">
+          <span class="chip chip-mute">Gemini 2.5 Flash</span>
+          <span class="chip chip-mute">Levenshtein name-match</span>
+          <span class="chip chip-mute">Auto-fill assist</span>
+          <span class="chip chip-mute">Vercel edge proxy</span>
+        </div>
+      </div>
+      <div class="col-span-12 lg:col-span-4">
+        <div class="border border-cb rounded-2xl p-5 bg-card relative overflow-hidden">
+          <div class="text-muted text-[11px] uppercase tracking-widest mb-3">Projected impact</div>
+          <div class="space-y-3">
+            <div class="flex items-baseline justify-between">
+              <span class="text-dim text-sm">Avg resolution time</span>
+              <span class="font-mono text-sm"><span class="text-danger line-through">4.2 days</span> <span class="text-accent ml-2">&lt; 60s</span></span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-dim text-sm">Drop-off at DTC field</span>
+              <span class="font-mono text-sm"><span class="text-danger line-through">31%</span> <span class="text-accent ml-2">~2.4%</span></span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-dim text-sm">Support tickets / mo</span>
+              <span class="font-mono text-sm"><span class="text-danger line-through">~1,800</span> <span class="text-accent ml-2">~140</span></span>
+            </div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-dim text-sm">NPS lift (est.)</span>
+              <span class="font-mono text-sm text-accent">+14</span>
+            </div>
+          </div>
+          <div class="text-muted text-[10px] mt-4 leading-relaxed">
+            Internal estimates from US transfer cohort drop-off analysis. Not audited.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAB NAV ===================== -->
+  <div class="max-w-7xl mx-auto px-6 pt-7">
+    <div class="tab-bar" role="tablist" aria-label="TaxonBot modes">
+      <button class="tab-btn is-active" data-tab="diagnose" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        Diagnose a screen
+      </button>
+      <button class="tab-btn" data-tab="terminal" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        Ask TaxonBot
+        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-full" style="background: var(--accent-soft); color: var(--accent);">NEW</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ===================== MODE: DIAGNOSE A SCREEN ===================== -->
+  <main id="mode-diagnose" class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-12 gap-6">
+
+    <!-- LEFT COLUMN: Controls -->
+    <aside class="col-span-12 lg:col-span-5 space-y-6">
+
+      <!-- Dropzone -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-semibold text-[15px]">1. Upload a stuck screen</h2>
+          <span class="text-muted text-[11px]">PNG · JPG · WEBP</span>
+        </div>
+        <label id="dropzone" class="dropzone block rounded-xl p-6 text-center cursor-pointer bg-card-h">
+          <input type="file" id="file-input" accept="image/*" class="hidden">
+          <div id="dropzone-empty">
+            <div class="w-12 h-12 mx-auto mb-3 rounded-full flex items-center justify-center" style="background: var(--accent-soft);">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" style="color: var(--accent);">
+                <path d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="font-semibold text-[14px]">Drop screenshot here</div>
+            <div class="text-muted text-[12px] mt-1">or click to browse</div>
+          </div>
+          <div id="dropzone-filled" class="hidden">
+            <div class="font-semibold text-[14px] text-accent" id="dz-filename">image.png</div>
+            <div class="text-muted text-[12px] mt-1">Click to replace · <span class="text-dim">queued for diagnosis</span></div>
+          </div>
+        </label>
+      </div>
+
+      <!-- Presets -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="font-semibold text-[15px]">2. Or try a baked scenario</h2>
+          <span class="text-muted text-[11px]">No API call · works offline</span>
+        </div>
+        <div class="space-y-2.5" id="preset-list">
+          <!-- Injected by JS -->
+        </div>
+      </div>
+
+      <!-- Diagnose button -->
+      <button id="diagnose-btn" disabled
+              class="btn-primary w-full rounded-xl py-3.5 text-[14px] flex items-center justify-center gap-2">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13l2 2 4-4"/></svg>
+        <span id="diagnose-label">Run Diagnostic</span>
+      </button>
+
+      <!-- Name match panel (post-diagnosis) -->
+      <div id="name-match" class="hidden border border-c rounded-xl p-4 bg-card">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-[13px]">Local sanity check · Levenshtein name match</h3>
+          <span class="text-muted text-[10px] uppercase tracking-widest">Step 3 / 5</span>
+        </div>
+        <div class="space-y-2 text-[13px]">
+          <div class="flex justify-between">
+            <span class="text-dim">INDmoney KYC name</span>
+            <span class="font-mono" id="nm-kyc">—</span>
+          </div>
+          <div class="flex justify-between">
+            <span class="text-dim">Name on form</span>
+            <span class="font-mono" id="nm-form">—</span>
+          </div>
+        </div>
+        <div class="mt-4">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-dim text-[12px]">Similarity</span>
+            <span class="font-mono font-semibold text-[13px]" id="nm-pct">—</span>
+          </div>
+          <div class="h-2 rounded-full overflow-hidden" style="background: var(--border);">
+            <div id="nm-bar" class="h-full rounded-full" style="width: 0%; background: var(--accent); transition: width .8s ease;"></div>
+          </div>
+          <div class="text-muted text-[11px] mt-2" id="nm-verdict">—</div>
+        </div>
+      </div>
+
+      <!-- Telemetry chip (looks live during diagnosis) -->
+      <div id="ai-steps" class="hidden border border-c rounded-xl p-4 bg-card">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold text-[13px] flex items-center gap-2">
+            <span class="pulse-dot"></span>
+            TaxonBot is analyzing
+          </h3>
+          <span class="text-muted text-[10px] uppercase tracking-widest font-mono" id="ai-step-counter">0/6</span>
+        </div>
+        <div class="space-y-1" id="ai-step-list"></div>
+      </div>
+    </aside>
+
+    <!-- RIGHT COLUMN: Screenshot viewer + diagnosis -->
+    <section class="col-span-12 lg:col-span-7 space-y-6">
+
+      <!-- Screenshot frame -->
+      <div class="rounded-2xl overflow-hidden border border-c bg-card">
+        <div class="win-chrome px-4 py-2.5 flex items-center gap-2">
+          <span class="traffic r"></span>
+          <span class="traffic y"></span>
+          <span class="traffic g"></span>
+          <div class="flex-1 text-center text-muted text-[11px] font-mono" id="win-url">about:blank</div>
+          <span class="text-muted text-[10px] uppercase tracking-widest">User's screen</span>
+        </div>
+        <div class="p-3 relative" id="screenshot-host">
+          <div id="screenshot-empty" class="aspect-[4/3] rounded-lg flex flex-col items-center justify-center text-center" style="background: #08110D; border: 1px dashed var(--border);">
+            <div class="text-muted text-[12px] uppercase tracking-widest mb-3">No screen loaded</div>
+            <div class="text-dim text-[14px] max-w-sm leading-relaxed">
+              Drop an image on the left, or click one of the three baked scenarios to see TaxonBot diagnose a real INDmoney failure case.
+            </div>
+            <div class="ind-bubble mt-6 px-4 py-2.5 rounded-full text-[#03150F] text-[12px] font-semibold flex items-center gap-2">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              "Stuck on your transfer? Tap here."
+            </div>
+          </div>
+          <div id="screenshot-svg" class="relative rounded-lg overflow-hidden hidden">
+            <!-- SVG injected here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Diagnosis result -->
+      <div id="diagnosis" class="hidden">
+        <div class="border border-c rounded-2xl bg-card overflow-hidden">
+
+          <!-- Diagnosis header -->
+          <div class="p-5 border-b border-c flex items-start gap-4">
+            <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: var(--accent-soft);">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="chip" id="dx-portal">PORTAL</span>
+                <span class="chip chip-warn" id="dx-fieldcount">— issues</span>
+              </div>
+              <h3 class="font-bold text-[18px] leading-tight" id="dx-title">—</h3>
+              <p class="text-dim text-[13px] mt-1.5 leading-relaxed" id="dx-description">—</p>
+            </div>
+          </div>
+
+          <!-- Field cards -->
+          <div class="p-5 space-y-2.5" id="dx-fields"></div>
+
+          <!-- Resolution -->
+          <div class="px-5 pb-5">
+            <div class="rounded-xl p-4 border border-cb" style="background: var(--accent-soft);">
+              <div class="flex items-center gap-2 mb-2">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" class="text-accent"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+                <span class="text-accent text-[11px] font-bold uppercase tracking-widest">Resolution</span>
+              </div>
+              <p class="text-[14px] leading-relaxed" id="dx-resolution">—</p>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div class="px-5 pb-5 flex flex-wrap gap-2" id="dx-actions"></div>
+
+          <!-- Scenario-specific growth impact -->
+          <div class="border-t border-c px-5 py-4 grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]" id="dx-growth"></div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- ===================== MODE: ASK TAXONBOT ===================== -->
+  <main id="mode-terminal" hidden class="max-w-7xl mx-auto px-6 py-8">
+    <div id="terminal-root" class="rounded-2xl overflow-hidden border border-c bg-card" style="min-height: 720px;"></div>
+  </main>
+
+  <!-- ===================== BOTTOM: GROWTH IMPACT ===================== -->
+  <section class="border-t border-c bg-elev mt-4">
+    <div class="max-w-7xl mx-auto px-6 py-12">
+      <div class="flex items-end justify-between mb-8 flex-wrap gap-4">
+        <div>
+          <div class="chip mb-2">Why this matters for INDmoney</div>
+          <h2 class="text-2xl md:text-[28px] font-extrabold tracking-tight">From "stuck user" to "stickier user"</h2>
+          <p class="text-dim text-[14px] mt-2 max-w-2xl">
+            Every diagnosed failure here is a support ticket that doesn't fire, a transfer that doesn't churn, and a tax loss that doesn't happen.
+            Three vectors compound: retention, CX cost, and trust.
+          </p>
+        </div>
+        <a href="#" class="btn-ghost rounded-lg px-4 py-2 text-[13px] flex items-center gap-2">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+          Spec doc
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="border border-c rounded-xl p-5 bg-card">
+          <div class="text-muted text-[10px] uppercase tracking-widest mb-2">Retention</div>
+          <div class="font-mono font-extrabold text-2xl text-accent">+29%</div>
+          <div class="text-dim text-[12px] mt-1">US transfer completion rate</div>
+          <div class="text-muted text-[11px] mt-3">From 69% → projected ~98% once TaxonBot lands</div>
+        </div>
+        <div class="border border-c rounded-xl p-5 bg-card">
+          <div class="text-muted text-[10px] uppercase tracking-widest mb-2">CX cost</div>
+          <div class="font-mono font-extrabold text-2xl text-accent">−92%</div>
+          <div class="text-dim text-[12px] mt-1">Support tickets on transfer pain</div>
+          <div class="text-muted text-[11px] mt-3">~1,800 → ~140 / month, at the current US cohort size</div>
+        </div>
+        <div class="border border-c rounded-xl p-5 bg-card">
+          <div class="text-muted text-[10px] uppercase tracking-widest mb-2">Tax saved</div>
+          <div class="font-mono font-extrabold text-2xl text-accent">₹4.8Cr</div>
+          <div class="text-dim text-[12px] mt-1">Avoided STCG across CDSL cohort</div>
+          <div class="text-muted text-[11px] mt-3">Modeling Code 2 misuse at 12% of own-account transfers</div>
+        </div>
+        <div class="border border-c rounded-xl p-5 bg-card">
+          <div class="text-muted text-[10px] uppercase tracking-widest mb-2">Wedge</div>
+          <div class="font-mono font-extrabold text-2xl text-accent">First</div>
+          <div class="text-dim text-[12px] mt-1">Mover on multimodal ops in India fintech</div>
+          <div class="text-muted text-[11px] mt-3">Zerodha, Groww, Upstox: no visual diagnostic layer today</div>
+        </div>
+      </div>
+
+      <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-[13px]">
+        <div class="border border-c rounded-xl p-5 bg-card">
+          <div class="text-accent text-[11px] font-bold uppercase tracking-widest mb-2">Phase 1 · 4 weeks</div>
+          <div class="font-semibold mb-1.5">Ship behind a flag</div>
+          <div class="text-dim leading-relaxed">Wire the chat bubble into the US Stocks tab. Start with Morgan Stanley + Schwab. A/B against today's support flow.</div>
+        </div>
+        <div class="border border-c rounded-xl p-5 bg-card">
+          <div class="text-accent text-[11px] font-bold uppercase tracking-widest mb-2">Phase 2 · 6 weeks</div>
+          <div class="font-semibold mb-1.5">Open to CDSL/NSDL</div>
+          <div class="text-dim leading-relaxed">Add Indian depository diagnostics. This is where the tax-saved metric becomes the headline.</div>
+        </div>
+        <div class="border border-c rounded-xl p-5 bg-card">
+          <div class="text-accent text-[11px] font-bold uppercase tracking-widest mb-2">Phase 3 · ongoing</div>
+          <div class="font-semibold mb-1.5">Auto-fill via deep links</div>
+          <div class="text-dim leading-relaxed">Where partners support it (CDSL TPIN flow, Alpaca direct), skip the manual step entirely.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="border-t border-c py-6 text-center text-muted text-[11px]">
+    Built as a 2-hour interview POC · Shriti Chandra · TaxonBot is an unofficial concept, not affiliated with INDmoney
+  </footer>
+
+  <!-- ===================== TOASTS ===================== -->
+  <div id="toast-host" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+  <!-- ===================== SCRIPTS ===================== -->
+  <script src="scenarios.js"></script>
+  <script src="agents.js"></script>
+  <script src="terminal.js"></script>
+  <script>
+  (function () {
+    'use strict';
+
+    // ---------- DOM refs ----------
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+    const dropzone = $('#dropzone');
+    const fileInput = $('#file-input');
+    const dzEmpty = $('#dropzone-empty');
+    const dzFilled = $('#dropzone-filled');
+    const dzFilename = $('#dz-filename');
+    const diagnoseBtn = $('#diagnose-btn');
+    const diagnoseLabel = $('#diagnose-label');
+
+    const screenshotEmpty = $('#screenshot-empty');
+    const screenshotSvg = $('#screenshot-svg');
+    const screenshotHost = $('#screenshot-host');
+    const winUrl = $('#win-url');
+
+    const aiSteps = $('#ai-steps');
+    const aiStepList = $('#ai-step-list');
+    const aiStepCounter = $('#ai-step-counter');
+
+    const nameMatch = $('#name-match');
+    const nmKyc = $('#nm-kyc');
+    const nmForm = $('#nm-form');
+    const nmPct = $('#nm-pct');
+    const nmBar = $('#nm-bar');
+    const nmVerdict = $('#nm-verdict');
+
+    const diagnosis = $('#diagnosis');
+    const dxTitle = $('#dx-title');
+    const dxDescription = $('#dx-description');
+    const dxPortal = $('#dx-portal');
+    const dxFieldcount = $('#dx-fieldcount');
+    const dxFields = $('#dx-fields');
+    const dxResolution = $('#dx-resolution');
+    const dxActions = $('#dx-actions');
+    const dxGrowth = $('#dx-growth');
+
+    const presetList = $('#preset-list');
+    const toastHost = $('#toast-host');
+
+    // ---------- State ----------
+    const state = {
+      uploadedBase64: null,
+      uploadedMime: null,
+      activeScenarioId: null,  // 'ms_dtc' | 'cdsl_code2' | 'stcg_trap' | null
+      lastResponse: null
+    };
+
+    // ---------- Utilities ----------
+    function toast(msg, kind) {
+      kind = kind || 'info';
+      const t = document.createElement('div');
+      const color = kind === 'success' ? 'var(--accent)' : kind === 'warn' ? 'var(--warning)' : 'var(--text-dim)';
+      t.className = 'rounded-lg border px-4 py-2.5 text-[13px] font-medium fade-up';
+      t.style.cssText = `background: var(--bg-card); color: var(--text); border-color: ${color};`;
+      t.innerHTML = msg;
+      toastHost.appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .25s'; setTimeout(() => t.remove(), 250); }, 2400);
+    }
+
+    function copyToClipboard(text) {
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).then(() => toast(`Copied <span class="font-mono text-accent">${escapeHtml(text)}</span>`, 'success'));
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+        toast('Copied', 'success');
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+    // ---------- Levenshtein ----------
+    function levenshtein(a, b) {
+      const m = [];
+      for (let i = 0; i <= b.length; i++) m[i] = [i];
+      for (let j = 0; j <= a.length; j++) m[0][j] = j;
+      for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+          if (b.charAt(i - 1) === a.charAt(j - 1)) {
+            m[i][j] = m[i - 1][j - 1];
+          } else {
+            m[i][j] = Math.min(m[i - 1][j - 1] + 1, m[i][j - 1] + 1, m[i - 1][j] + 1);
+          }
+        }
+      }
+      return m[b.length][a.length];
+    }
+    function similarityPct(a, b) {
+      const A = a.trim().toLowerCase();
+      const B = b.trim().toLowerCase();
+      const dist = levenshtein(A, B);
+      const max = Math.max(A.length, B.length) || 1;
+      return Math.round((1 - dist / max) * 1000) / 10;
+    }
+
+    // ---------- Preset cards ----------
+    function buildPresets() {
+      const scenarios = window.INDTAXONBOT_SCENARIOS;
+      if (!scenarios) return;
+      presetList.innerHTML = '';
+      Object.values(scenarios).forEach((sc) => {
+        const card = document.createElement('button');
+        card.className = 'preset-card rounded-xl p-3.5 w-full text-left flex items-start gap-3';
+        const errCount = sc.geminiResponse.fields.filter(f => f.status !== 'Valid').length;
+        card.innerHTML = `
+          <div class="w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center font-mono font-bold" style="background: var(--accent-soft); color: var(--accent);">
+            ${sc.id === 'ms_dtc' ? 'US' : sc.id === 'cdsl_code2' ? 'IN' : '₹'}
+          </div>
+          <div class="flex-1 min-w-0">
+            <div class="font-semibold text-[13.5px]">${escapeHtml(sc.label)}</div>
+            <div class="text-dim text-[12px] mt-0.5 leading-snug">${escapeHtml(sc.subtitle)}</div>
+            <div class="text-muted text-[11px] mt-1.5 flex items-center gap-2">
+              <span>${escapeHtml(sc.portalBrand)}</span>
+              <span>·</span>
+              <span class="text-warning">${errCount} ${errCount === 1 ? 'issue' : 'issues'}</span>
+            </div>
+          </div>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" class="text-muted flex-shrink-0 mt-1"><path d="M9 18l6-6-6-6"/></svg>
+        `;
+        card.addEventListener('click', () => loadPreset(sc.id));
+        presetList.appendChild(card);
+      });
+    }
+
+    function loadPreset(id) {
+      const sc = window.INDTAXONBOT_SCENARIOS[id];
+      if (!sc) return;
+      state.activeScenarioId = id;
+      state.uploadedBase64 = null;
+      state.uploadedMime = null;
+      diagnoseBtn.disabled = false;
+      diagnoseLabel.textContent = 'Run Diagnostic on ' + sc.label;
+      winUrl.textContent = sc.portalBrand.toLowerCase().replace(/\s+/g, '') + '.com/transfer';
+
+      // Show the screenshot
+      screenshotEmpty.classList.add('hidden');
+      screenshotSvg.classList.remove('hidden');
+      screenshotSvg.innerHTML = sc.screenshotSvg;
+
+      // Reset prior diagnosis state
+      diagnosis.classList.add('hidden');
+      nameMatch.classList.add('hidden');
+      aiSteps.classList.add('hidden');
+
+      // Reset dropzone
+      dzEmpty.classList.remove('hidden');
+      dzFilled.classList.add('hidden');
+      dropzone.classList.remove('has-file');
+
+      // Auto-run after a short beat so the user feels the click "registered"
+      setTimeout(() => runDiagnostic(), 350);
+    }
+
+    // ---------- Dropzone wiring ----------
+    function wireDropzone() {
+      fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+      ['dragenter', 'dragover'].forEach(evt =>
+        dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('is-dragover'); })
+      );
+      ['dragleave', 'drop'].forEach(evt =>
+        dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('is-dragover'); })
+      );
+      dropzone.addEventListener('drop', (e) => {
+        const f = e.dataTransfer?.files?.[0];
+        if (f) handleFile(f);
+      });
+    }
+
+    function handleFile(file) {
+      if (!file || !file.type.startsWith('image/')) {
+        toast('Please drop an image (PNG / JPG / WEBP)', 'warn');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target.result;
+        state.uploadedBase64 = dataUrl.split(',')[1];
+        state.uploadedMime = file.type;
+        state.activeScenarioId = null;
+
+        // Preview the user's image in the screenshot frame
+        screenshotEmpty.classList.add('hidden');
+        screenshotSvg.classList.remove('hidden');
+        screenshotSvg.innerHTML = `<img src="${dataUrl}" alt="uploaded" class="w-full h-auto block" />`;
+        winUrl.textContent = 'uploaded-screenshot · ' + (file.name || 'image');
+
+        dzEmpty.classList.add('hidden');
+        dzFilled.classList.remove('hidden');
+        dzFilename.textContent = file.name || 'image';
+        dropzone.classList.add('has-file');
+
+        diagnoseBtn.disabled = false;
+        diagnoseLabel.textContent = 'Run Diagnostic';
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // ---------- Diagnostic flow ----------
+    const AI_STEPS = [
+      'Reading screenshot pixels…',
+      'Detecting portal type (US brokerage / Indian depository / sell order)…',
+      'Extracting form fields with multimodal LLM…',
+      'Running Levenshtein name match against your KYC…',
+      'Cross-checking depositary rules and tax implications…',
+      'Generating one-tap resolution…'
+    ];
+
+    async function runDiagnostic() {
+      diagnoseBtn.disabled = true;
+      diagnosis.classList.add('hidden');
+      nameMatch.classList.add('hidden');
+
+      // Render streaming steps
+      aiSteps.classList.remove('hidden');
+      aiStepList.innerHTML = '';
+      AI_STEPS.forEach((label, i) => {
+        const row = document.createElement('div');
+        row.className = 'step-row';
+        row.dataset.idx = i;
+        row.innerHTML = `<span class="marker"></span><span>${label}</span>`;
+        aiStepList.appendChild(row);
+      });
+      aiStepCounter.textContent = `0/${AI_STEPS.length}`;
+
+      // Fire the API call in parallel with the step animation if user uploaded
+      let apiPromise = null;
+      if (state.activeScenarioId) {
+        apiPromise = Promise.resolve({ __preset: true });
+      } else if (state.uploadedBase64) {
+        apiPromise = fetch('/api/gemini', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: state.uploadedBase64, mimeType: state.uploadedMime })
+        })
+          .then(r => r.json())
+          .catch(err => ({ __error: true, message: err.message }));
+      } else {
+        return;
+      }
+
+      const stepDurations = [350, 450, 600, 300, 500, 400];
+      for (let i = 0; i < AI_STEPS.length; i++) {
+        const row = aiStepList.children[i];
+        row.classList.add('is-active');
+        await sleep(stepDurations[i]);
+        row.classList.remove('is-active');
+        row.classList.add('is-done');
+        aiStepCounter.textContent = `${i + 1}/${AI_STEPS.length}`;
+      }
+
+      const apiResult = await apiPromise;
+
+      // Branch on outcome
+      if (state.activeScenarioId) {
+        renderDiagnosis(window.INDTAXONBOT_SCENARIOS[state.activeScenarioId]);
+      } else if (apiResult.__mock) {
+        toast(apiResult.message, 'warn');
+        renderEmptyDiagnosis('Live AI disabled', apiResult.message);
+      } else if (apiResult.__timeout || apiResult.__malformed || apiResult.__error) {
+        toast(apiResult.message || 'Live AI hiccup — try a baked scenario', 'warn');
+        renderEmptyDiagnosis('AI fallback', apiResult.message || 'The live model did not respond cleanly. Try one of the three baked scenarios on the left.');
+      } else {
+        // Real Gemini response — build a synthetic scenario wrapper to reuse render path
+        renderDiagnosis({
+          id: 'live',
+          label: apiResult.title || 'Live diagnosis',
+          portalBrand: 'Uploaded screenshot',
+          userProfile: { fullName: 'Shriti Chandra', panMasked: 'ABCPC1234K' },
+          parsedNameOnForm: (apiResult.fields || []).find(f => /name/i.test(f.name))?.current || 'Shriti Chandra',
+          geminiResponse: apiResult,
+          autofillTargets: [],
+          growthImpact: {
+            issueRate: 'Live analysis',
+            avgResolution: 'Variable',
+            withTaxonBot: '<60s end-to-end'
+          }
+        });
+      }
+
+      diagnoseBtn.disabled = false;
+    }
+
+    function renderEmptyDiagnosis(title, body) {
+      diagnosis.classList.remove('hidden');
+      dxPortal.textContent = 'FALLBACK';
+      dxFieldcount.textContent = 'demo mode';
+      dxTitle.textContent = title;
+      dxDescription.textContent = body;
+      dxFields.innerHTML = `<div class="text-dim text-[13px]">Click any of the three baked scenarios on the left to see TaxonBot in full action.</div>`;
+      dxResolution.textContent = 'Set GEMINI_API_KEY in Vercel → Project Settings → Environment Variables to enable live AI.';
+      dxActions.innerHTML = '';
+      dxGrowth.innerHTML = '';
+    }
+
+    function statusToClass(status) {
+      switch (status) {
+        case 'Valid': return 'is-valid';
+        case 'Error': return 'is-error';
+        case 'Missing': return 'is-missing';
+        case 'Config Conflict': return 'is-conflict';
+        default: return '';
+      }
+    }
+    function statusChip(status) {
+      const map = {
+        'Valid':   { cls: 'chip', label: 'Valid' },
+        'Error':   { cls: 'chip chip-danger', label: 'Error' },
+        'Missing': { cls: 'chip chip-warn', label: 'Missing' },
+        'Config Conflict': { cls: 'chip chip-warn', label: 'Config conflict' }
+      };
+      const m = map[status] || { cls: 'chip chip-mute', label: status };
+      return `<span class="${m.cls}">${m.label}</span>`;
+    }
+
+    function renderDiagnosis(sc) {
+      state.lastResponse = sc;
+      const g = sc.geminiResponse;
+
+      // Name match panel
+      const kyc = sc.userProfile.fullName;
+      const formName = sc.parsedNameOnForm || '—';
+      const pct = similarityPct(kyc, formName);
+      nameMatch.classList.remove('hidden');
+      nmKyc.textContent = kyc;
+      nmForm.textContent = formName;
+      nmPct.textContent = `${pct.toFixed(1)}%`;
+      nmBar.style.background = pct >= 90 ? 'var(--success)' : pct >= 75 ? 'var(--warning)' : 'var(--danger)';
+      nmBar.style.width = `${Math.min(100, Math.max(4, pct))}%`;
+      nmVerdict.textContent =
+        pct >= 95 ? 'Exact match — no name-mismatch risk.' :
+        pct >= 90 ? 'Soft match. Middle initial / suffix difference is acceptable on this portal.' :
+        pct >= 75 ? 'Partial match. Flagging for manual confirmation before submission.' :
+                    'Mismatch — blocking pre-submit. Likely wrong KYC profile selected.';
+
+      // Diagnosis header
+      diagnosis.classList.remove('hidden');
+      diagnosis.classList.add('fade-up');
+      dxTitle.textContent = g.title || '—';
+      dxDescription.textContent = g.description || '';
+      dxPortal.textContent = (g.portalType || 'PORTAL').replace(/_/g, ' ');
+      const issueCount = (g.fields || []).filter(f => f.status !== 'Valid').length;
+      dxFieldcount.textContent = `${issueCount} ${issueCount === 1 ? 'issue' : 'issues'} flagged`;
+
+      // Field cards
+      dxFields.innerHTML = '';
+      (g.fields || []).forEach((f, idx) => {
+        const card = document.createElement('div');
+        card.className = `field-card ${statusToClass(f.status)} fade-up`;
+        card.style.animationDelay = `${idx * 60}ms`;
+        const showCorrection = f.status !== 'Valid' && f.correct && f.correct !== f.current;
+        card.innerHTML = `
+          <div class="flex items-center justify-between gap-3 mb-2">
+            <div class="font-semibold text-[13.5px]">${escapeHtml(f.name)}</div>
+            ${statusChip(f.status)}
+          </div>
+          <div class="grid grid-cols-1 ${showCorrection ? 'md:grid-cols-2' : ''} gap-2 mb-2">
+            <div>
+              <div class="text-muted text-[10px] uppercase tracking-widest mb-1">${showCorrection ? 'Currently' : 'Value'}</div>
+              <div class="font-mono text-[12.5px] ${f.status === 'Valid' ? '' : 'text-danger'}">${escapeHtml(f.current || '(empty)')}</div>
+            </div>
+            ${showCorrection ? `
+            <div>
+              <div class="text-muted text-[10px] uppercase tracking-widest mb-1">Should be</div>
+              <div class="font-mono text-[12.5px] text-accent flex items-center gap-2">
+                ${escapeHtml(f.correct)}
+                <button class="text-muted hover:text-accent" data-copy="${escapeHtml(f.correct)}" title="Copy">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
+            </div>` : ''}
+          </div>
+          ${f.why ? `<div class="text-dim text-[12px] leading-relaxed">${escapeHtml(f.why)}</div>` : ''}
+        `;
+        dxFields.appendChild(card);
+      });
+
+      // Resolution
+      dxResolution.textContent = g.resolution || '';
+
+      // Actions
+      dxActions.innerHTML = '';
+      (g.actions || []).forEach((a) => {
+        const btn = document.createElement('button');
+        const isAutofill = a.action && a.action.startsWith('autofill:');
+        btn.className = isAutofill ? 'btn-primary rounded-lg px-3.5 py-2 text-[12.5px]' : 'btn-ghost rounded-lg px-3.5 py-2 text-[12.5px]';
+        btn.innerHTML = a.label;
+        btn.addEventListener('click', () => handleAction(a.action, sc));
+        dxActions.appendChild(btn);
+      });
+
+      // Per-scenario growth chips
+      const gi = sc.growthImpact || {};
+      dxGrowth.innerHTML = `
+        ${gi.issueRate ? growthCell('Issue rate', gi.issueRate) : ''}
+        ${gi.avgResolution ? growthCell('Today', gi.avgResolution) : ''}
+        ${gi.withTaxonBot ? growthCell('With TaxonBot', gi.withTaxonBot, true) : ''}
+        ${gi.annualSavings ? growthCell('User saves', gi.annualSavings, true) : ''}
+      `;
+
+      // Wire field-card copy buttons
+      $$('[data-copy]').forEach(b => b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        copyToClipboard(b.dataset.copy);
+      }));
+
+      // Scroll to diagnosis
+      setTimeout(() => diagnosis.scrollIntoView({ behavior: 'smooth', block: 'start' }), 200);
+    }
+
+    function growthCell(label, value, highlight) {
+      return `
+        <div>
+          <div class="text-muted text-[10px] uppercase tracking-widest mb-1">${escapeHtml(label)}</div>
+          <div class="font-semibold ${highlight ? 'text-accent' : ''}">${escapeHtml(value)}</div>
+        </div>`;
+    }
+
+    function handleAction(action, sc) {
+      if (!action) return;
+      if (action.startsWith('copy:')) {
+        copyToClipboard(action.slice(5));
+      } else if (action.startsWith('autofill:')) {
+        runAutofill(sc);
+      } else if (action.startsWith('schedule:')) {
+        toast(`Sell rescheduled to <span class="font-mono text-accent">${escapeHtml(action.slice(9))}</span>`, 'success');
+      } else if (action.startsWith('explain:')) {
+        toast('Explainer modal would open here in production', 'info');
+      }
+    }
+
+    // ---------- Auto-fill cursor animation ----------
+    async function runAutofill(sc) {
+      if (!sc || !sc.autofillTargets || !sc.autofillTargets.length) {
+        toast('No autofill targets available for this scenario', 'warn');
+        return;
+      }
+      const svgWrap = screenshotSvg.querySelector('svg');
+      if (!svgWrap) return;
+
+      // Compute the rendered scale: viewBox 800x600 → actual pixel size
+      const rect = svgWrap.getBoundingClientRect();
+      const hostRect = screenshotSvg.getBoundingClientRect();
+      const scaleX = rect.width / 800;
+      const scaleY = rect.height / 600;
+
+      // Inject a cursor element
+      const cursor = document.createElement('div');
+      cursor.className = 'ax-cursor';
+      cursor.innerHTML = `
+        <svg viewBox="0 0 18 22" width="18" height="22" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2 2 L2 18 L7 14 L10 21 L13 19 L10 12 L16 12 Z" fill="#FFFFFF" stroke="#03150F" stroke-width="1.2" stroke-linejoin="round"/>
+        </svg>
+      `;
+      cursor.style.left = '8px';
+      cursor.style.top = '8px';
+      screenshotSvg.appendChild(cursor);
+
+      await sleep(120);
+
+      for (const target of sc.autofillTargets) {
+        const x = (target.svgX + target.svgW / 2) * scaleX + (rect.left - hostRect.left);
+        const y = (target.svgY + target.svgH / 2) * scaleY + (rect.top - hostRect.top);
+        cursor.style.left = `${x}px`;
+        cursor.style.top  = `${y}px`;
+        await sleep(640);
+
+        // Drop the "filled" pill onto the input box
+        const fill = document.createElement('div');
+        fill.className = 'ax-fill';
+        fill.style.left = `${target.svgX * scaleX + (rect.left - hostRect.left)}px`;
+        fill.style.top  = `${target.svgY * scaleY + (rect.top - hostRect.top)}px`;
+        fill.style.width = `${target.svgW * scaleX}px`;
+        fill.style.height = `${target.svgH * scaleY}px`;
+        fill.textContent = target.correctValue;
+        screenshotSvg.appendChild(fill);
+        await sleep(50);
+        fill.classList.add('show');
+        await sleep(380);
+      }
+
+      await sleep(250);
+      cursor.remove();
+      toast('All corrections applied to the form ✓', 'success');
+    }
+
+    // ---------- Tab switching + terminal mount ----------
+    let terminalMounted = false;
+
+    function switchTab(mode) {
+      $$('[data-tab]').forEach((b) => {
+        const active = b.dataset.tab === mode;
+        b.classList.toggle('is-active', active);
+        b.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      $('#mode-diagnose').hidden = (mode !== 'diagnose');
+      $('#mode-terminal').hidden = (mode !== 'terminal');
+
+      if (mode === 'terminal' && !terminalMounted) {
+        const terminal = window.INDTAXONBOT_TERMINAL;
+        const data = window.INDTAXONBOT_AGENTS;
+        if (terminal && terminal.mount && data) {
+          terminal.mount($('#terminal-root'), {
+            agents: data.roster,
+            queries: data.queries,
+            onAction: handleTerminalAction
+          });
+          terminalMounted = true;
+        } else {
+          $('#terminal-root').innerHTML = '<div class="p-8 text-dim text-center">Terminal module failed to load. Check that agents.js and terminal.js are served.</div>';
+        }
+      }
+    }
+
+    function handleTerminalAction(action) {
+      if (!action) return;
+      const { kind, label, payload } = action;
+      if (kind === 'copy') {
+        copyToClipboard(payload);
+      } else if (kind === 'open') {
+        window.open(payload, '_blank', 'noopener');
+        toast(`Opening <span class="font-mono text-accent">${escapeHtml(label)}</span> in a new tab`, 'info');
+      } else if (kind === 'primary') {
+        if (payload && /^https?:\/\//.test(payload)) {
+          window.open(payload, '_blank', 'noopener');
+          toast(`Opening <span class="font-mono text-accent">${escapeHtml(label)}</span>`, 'info');
+        } else {
+          toast(`<span class="text-accent font-semibold">${escapeHtml(label)}</span> · ${escapeHtml(payload || 'queued for execution')}`, 'success');
+        }
+      }
+    }
+
+    // ---------- Init ----------
+    function init() {
+      buildPresets();
+      wireDropzone();
+      diagnoseBtn.addEventListener('click', runDiagnostic);
+      $$('[data-tab]').forEach((b) => b.addEventListener('click', () => switchTab(b.dataset.tab)));
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  })();
+  </script>
+</body>
+</html>
