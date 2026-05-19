@@ -1,8 +1,8 @@
 # IND-TaxonBot
 
-A wealth-tech ops copilot built as an interview POC for the **Growth Associate** role at INDmoney.
+A wealth-tech ops copilot built as a POC.
 
-TaxonBot solves one specific problem: about a third of INDmoney's US-stock-transfer users abandon their flow at the receiving-broker step (wrong DTC numbers, misclassified CDSL reason codes, accidental short-term tax events). Today these failures get resolved in 4+ days through support tickets. This POC compresses that into under 60 seconds, via two product surfaces:
+TaxonBot solves one specific problem: INDmoney's US-stock-transfer flow faces user dropoffs because of the UX not being fully automated, results in long-winding customer support threads, and manual, complex steps to be done by the user at the receiving-broker step (wrong DTC numbers, misclassified CDSL reason codes, accidental short-term tax events). Today these failures get resolved in 4+ days through support tickets. This POC compresses that into under 60 seconds, via two product surfaces:
 
 1. **Diagnose a screen.** The user uploads a screenshot of their stuck broker portal. A multimodal LLM reads it, audits each field, and ships a one-tap correction with an auto-fill animation.
 
@@ -104,7 +104,7 @@ No build step, no dependencies to install. Tailwind and Plus Jakarta Sans load f
 
 This is an unaffiliated proof-of-concept. The metrics in the hero and impact panels (drop-off rates, projected ticket deflection, NPS lift) are illustrative estimates based on reasonable cohort modeling, not audited internal numbers. The user profile, ISINs, DP IDs, and account numbers in the scenarios are realistic but synthetic.
 
-Built in a 2-hour window.
+**Built in a 2-hour window.**
 
 ---
 
